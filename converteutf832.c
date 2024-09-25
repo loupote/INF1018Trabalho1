@@ -1,3 +1,6 @@
+/* Louis POTTIER 2411430 3WB /*
+/* Lucas Rodrigues _______ 3WA */
+
 #include <stdio.h>
 #include "converteutf832.h"
 
@@ -79,3 +82,7 @@ unsigned int convbigtolittle(unsigned int codepoint, unsigned int bytes){
 
   return codepoint;
 }
+
+
+
+/* INSERIR A FUNCAO INVERTIDA */
