@@ -1,4 +1,4 @@
-/* Louis POTTIER 2411430 3WB /*
+/* Louis POTTIER 2411430 3WB */
 /* Lucas Rodrigues _______ 3WA */
 
 #include <stdio.h>
@@ -7,16 +7,21 @@
 int convUtf8p32(FILE *arquivo_entrada, FILE *arquivo_saida){
   
   int BOM = 0xFFFE0000; /*Little Endian*/
+
+  /* Escrevendo o BOM ao inicio do arquivo */
   if (fwrite(&BOM, sizeof(BOM), 1, arquivo_saida) != 1) {
     printf("Erro na escritura do BOM\n");
     fclose(arquivo_saida);
     return 1;
   }
+  
+  
+  int c; /* Para a leitura */
+  unsigned int bytes = 0; /* Para conhecer o numero de bytes na codificacao UTF-8 */
+  unsigned int codepoint = 0; /* Para extrair o caracter codificado UTF-32 */
 
-  int c;
-  unsigned int codepoint = 0;
-  unsigned int bytes = 0;
 
+  
   while ((c = fgetc(arquivo_entrada)) != EOF) {
     if ((c & 0x80) == 0x00){
       bytes = 1;
@@ -48,10 +53,11 @@ int convUtf8p32(FILE *arquivo_entrada, FILE *arquivo_saida){
         codepoint = codepoint << 6;
       }
     }
-
+    
+    /* Conversao do Big Endian para o Little Endian */
     codepoint = convbigtolittle(codepoint, bytes);
 
-
+    /* Escritura no arquivo de saida */
     if (fwrite(&codepoint, sizeof(codepoint), 1, arquivo_saida) != 1){
       printf("Erro na escritura\n");
       return 0;
@@ -86,3 +92,6 @@ unsigned int convbigtolittle(unsigned int codepoint, unsigned int bytes){
 
 
 /* INSERIR A FUNCAO INVERTIDA */
+
+
+
