@@ -4,106 +4,89 @@
 #include <stdio.h>
 #include "converteUtf.h"
 
+// Função que converte Big Endian para Little Endian
 unsigned int convbigtolittle(unsigned int codepoint, unsigned int bytes);
 
-int get_BomValue (unsigned int bom );
+// Função que verifica o valor do BOM
+int get_BomValue(unsigned int bom);
 
+int convUtf8p32(FILE *arquivo_entrada, FILE *arquivo_saida) {
+    unsigned int BOM = 0xFFFE0000; // Little Endian
 
-int convUtf8p32(FILE *arquivo_entrada, FILE *arquivo_saida){
-  
-  int BOM = 0xFFFE0000; /*Little Endian*/
+    // Escrevendo o BOM ao início do arquivo
+    if (fwrite(&BOM, sizeof(BOM), 1, arquivo_saida) != 1) {
+        printf("Erro na escritura do BOM\n");
+        fclose(arquivo_saida);
+        return 1;
+    }
 
-  /* Escrevendo o BOM ao inicio do arquivo */
-  if (fwrite(&BOM, sizeof(BOM), 1, arquivo_saida) != 1) {
-    printf("Erro na escritura do BOM\n");
-    fclose(arquivo_saida);
+    int c; // Para a leitura
+    unsigned int bytes = 0; // Para conhecer o número de bytes na codificação UTF-8
+    unsigned int codepoint = 0; // Para extrair o caractere codificado UTF-32
+
+    while ((c = fgetc(arquivo_entrada)) != EOF) {
+        if ((c & 0x80) == 0x00) {
+            bytes = 1;
+            codepoint = c;
+        } else if ((c & 0xE0) == 0xC0) {
+            bytes = 2;
+            codepoint = (c & 0x1F) << 6;
+        } else if ((c & 0xF0) == 0xE0) {
+            bytes = 3;
+            codepoint = (c & 0x0F) << 12; // Corrigido para o deslocamento correto
+        } else if ((c & 0xF8) == 0xF0) {
+            bytes = 4;
+            codepoint = (c & 0x07) << 18; // Corrigido para o deslocamento correto
+        }
+
+        for (int i = 1; i < bytes; i++) {
+            c = fgetc(arquivo_entrada); // 10xx xxxx
+            if (c == EOF) {
+                printf("Erro: arquivo de entrada terminou inesperadamente.\n");
+                return 1;
+            }
+            codepoint = (codepoint << 6) | (c & 0x3F); // Ajustado o cálculo do codepoint
+        }
+
+        // Conversão do Big Endian para o Little Endian
+        codepoint = convbigtolittle(codepoint, bytes);
+
+        // Escrita no arquivo de saída
+        if (fwrite(&codepoint, sizeof(codepoint), 1, arquivo_saida) != 1) {
+            printf("Erro na escritura\n");
+            return 0;
+        }
+    }
     return 1;
-  }
-  
-  
-  int c; /* Para a leitura */
-  unsigned int bytes = 0; /* Para conhecer o numero de bytes na codificacao UTF-8 */
-  unsigned int codepoint = 0; /* Para extrair o caracter codificado UTF-32 */
-
-
-  
-  while ((c = fgetc(arquivo_entrada)) != EOF) {
-    if ((c & 0x80) == 0x00){
-      bytes = 1;
-      codepoint = c;
-    }
-
-    else if ((c & 0xE0) == 0xC0){
-      bytes = 2;
-      codepoint = (c & 0x1F) << 6;
-    }
-
-    else if ((c & 0x0F0) == 0xE0){
-      bytes = 3;
-      codepoint = (c & 0x0F) << 6;      
-    }
-
-    else if ((c & 0xF8) == 0xF0){
-      bytes = 4;
-      codepoint = (c & 0x07) << 6;
-    }
-
-    for (int i=1; i<bytes; i++){
-      
-      c = fgetc(arquivo_entrada); /* 10xx xxxx */
-      int aux = c | 0xC0; /* 11xx xxxx */
-      aux = aux & 0x3F; /* 00xx xxxx */
-      codepoint = codepoint | aux; /* ... XXxx xxxx */
-      if (i != (bytes-1)){
-        codepoint = codepoint << 6;
-      }
-    }
-    
-    /* Conversao do Big Endian para o Little Endian */
-    codepoint = convbigtolittle(codepoint, bytes);
-
-    /* Escritura no arquivo de saida */
-    if (fwrite(&codepoint, sizeof(codepoint), 1, arquivo_saida) != 1){
-      printf("Erro na escritura\n");
-      return 0;
-    }
-  
-  }
-  return 1;
 }
-
 
 int convUtf32p8(FILE *arq_entrada, FILE *arq_saida) {
     unsigned int inBuffer;
-    unsigned int current;
     unsigned int bom;
     unsigned long currentBytes;
     unsigned long writtenBytes;
-    unsigned char outBuffer[4] = {0, 0x80, 0x80, 0x80};
+    unsigned char outBuffer[4] = {0};
     int bytesCounter;
-    int counter;
 
     // Leitura do BOM
-    if (fread(&inBuffer, 4, 1, arq_entrada) != 1) {
+    if (fread(&inBuffer, sizeof(unsigned int), 1, arq_entrada) != 1) {
         fprintf(stderr, "\nErro E/S: leitura do arquivo de entrada");
         return -1;
     }
-    
+
     // Verificação do BOM e conversão de endian se necessário
     bom = get_BomValue(inBuffer);
     
     if (bom == -1) {
         fprintf(stderr, "\nErro E/S: leitura do caractere BOM");
         return -1;
-    }
-    
-    // Se for Little Endian, converte para Big Endian
-    if (bom == 2) {
+    } else if (bom == 2) {
+        // Se for Little Endian, converte para Big Endian
         inBuffer = convbigtolittle(inBuffer, 4);
     }
 
     // Loop para conversão dos caracteres
-    while ((currentBytes = fread(&inBuffer, 4, 1, arq_entrada)) == 1) {
+    while ((currentBytes = fread(&inBuffer, sizeof(unsigned int), 1, arq_entrada)) == 1) {
         // Se o arquivo for Little Endian, converte para Big Endian
         if (bom == 2) {
             inBuffer = convbigtolittle(inBuffer, 4);
@@ -134,9 +117,9 @@ int convUtf32p8(FILE *arq_entrada, FILE *arq_saida) {
         }
 
         // Escrita do caractere convertido no arquivo de saída
-        writtenBytes = fwrite(outBuffer, 1, bytesCounter, arq_saida);
+        writtenBytes = fwrite(outBuffer, sizeof(unsigned char), bytesCounter, arq_saida);
         if (writtenBytes != bytesCounter) {
-            fprintf(stderr, "Erro E/S: escrita do arquivo de saida");
+            fprintf(stderr, "Erro E/S: escrita do arquivo de saída");
             return -1;
         }
     }
@@ -146,36 +129,25 @@ int convUtf32p8(FILE *arq_entrada, FILE *arq_saida) {
         return -1;
     }
 
-    printf("Conversao 32 para 8 bem sucedida\n");
+    printf("Conversão de UTF-32 para UTF-8 bem-sucedida\n");
     return 0;
 }
 
+unsigned int convbigtolittle(unsigned int codepoint, unsigned int bytes) {
+    unsigned int result = 0;
 
-unsigned int convbigtolittle(unsigned int codepoint, unsigned int bytes){
-  int mask1, mask2, mask3;
-  mask1 = (codepoint & 0x000000FF) << 24;
-  mask2 = (codepoint & 0X0000FF00) << 8;
-  mask3 = (codepoint & 0X00FF0000) >> 8;
+    for (unsigned int i = 0; i < bytes; i++) {
+        result |= (codepoint & 0xFF) << (i * 8);
+        codepoint >>= 8;
+    }
 
-  if (bytes == 1){
-    codepoint = mask1;
-  }
-
-  if ((bytes == 2) | (bytes == 3)){
-    codepoint = mask1 | mask2;
-  }
-
-  if (bytes == 4){
-    codepoint = mask1 | mask2 | mask3;
-  }
-
-  return codepoint;
+    return result;
 }
 
-int get_BomValue (unsigned int bom ) {
-    if ( bom == 0xFEFF )
-        return 1;
-    if ( bom == 0Xfffe0000 )
-        return 2;
-    return -1;
+int get_BomValue(unsigned int bom) {
+    if (bom == 0xFEFF)
+        return 1; // Big Endian
+    if (bom == 0xFFFE0000)
+        return 2; // Little Endian
+    return -1; // Nenhum BOM reconhecido
 }
