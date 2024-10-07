@@ -1,4 +1,10 @@
 /* Louis POTTIER 2411430 3WB */
-/* Lucas Rodrigues _______ 3WA */
+/* Lucas Rodrigues 1912905 3WA */
 
 
+
+- Processo de conversão de UTF-32 para UTF-8:
+.Leitura do arquivo de entrada.
+.Verificação da codificação através do caractere BOM (Byte Order Mark).
+.Realização da conversão de UTF-32 para UTF-8.
+.Escrita dos dados convertidos no arquivo de saída.
